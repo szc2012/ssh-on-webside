@@ -5,29 +5,45 @@ import os
 
 app = Flask(__name__)
 
-# Load SSH config from config.json
-with open('config.json') as f:
-    config = json.load(f)
+# 全局变量存储SSH配置和会话
+ssh_config = {
+    'host': '',
+    'port': 22,
+    'username': '',
+    'password': ''
+}
+ssh_client = None
+ssh_channel = None
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# 全局变量存储SSH会话
-ssh_client = None
-ssh_channel = None
+@app.route('/ssh')
+def ssh_page():
+    return render_template('index.html')
+
+@app.route('/ssh/configure', methods=['POST'])
+def ssh_configure():
+    global ssh_config
+    data = request.json
+    ssh_config['host'] = data.get('host', '')
+    ssh_config['port'] = data.get('port', 22)
+    ssh_config['username'] = data.get('username', '')
+    ssh_config['password'] = data.get('password', '')
+    return jsonify({'status': 'success'})
 
 @app.route('/ssh/connect', methods=['POST'])
 def ssh_connect():
-    global ssh_client, ssh_channel
+    global ssh_client, ssh_channel, ssh_config
     try:
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh_client.connect(
-            hostname=config['host'],
-            port=config['port'],
-            username=config['username'],
-            password=config['password'],
+            hostname=ssh_config['host'],
+            port=ssh_config['port'],
+            username=ssh_config['username'],
+            password=ssh_config['password'],
             timeout=10
         )
         ssh_channel = ssh_client.invoke_shell()

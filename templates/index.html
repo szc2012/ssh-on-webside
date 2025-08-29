@@ -3,24 +3,136 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web SSH</title>
+    <title>Web SSH Client</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #000;
-            height: 100vh;
-            overflow: hidden;
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 配置Tailwind自定义颜色和字体 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36CFC9',
+                        dark: '#1D2939',
+                        'dark-light': '#344054',
+                        'terminal-bg': '#0F172A',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
         }
-        #terminal {
-            width: 100%;
-            height: 100%;
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .form-input-focus {
+                @apply focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none;
+            }
+            .card-shadow {
+                @apply shadow-lg shadow-primary/10;
+            }
+            .transition-smooth {
+                @apply transition-all duration-300 ease-in-out;
+            }
         }
     </style>
 </head>
-<body>
-    <div id="terminal"></div>
+<body class="bg-gray-50 font-inter text-gray-800 min-h-screen overflow-hidden">
+    <!-- 背景装饰元素 -->
+    <div class="fixed inset-0 -z-10 overflow-hidden">
+        <div class="absolute -right-40 -top-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl"></div>
+        <div class="absolute -left-20 -bottom-20 w-60 h-60 bg-secondary/5 rounded-full blur-3xl"></div>
+    </div>
+
+    <!-- 配置表单卡片 -->
+    <div id="config-form" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl card-shadow p-6 md:p-8 w-[90%] max-w-md z-1000 transition-smooth">
+        <div class="text-center mb-6">
+            <div class="inline-flex items-center justify-center w-14 h-14 bg-primary/10 rounded-full mb-4">
+                <i class="fa fa-terminal text-2xl text-primary"></i>
+            </div>
+            <h2 class="text-[clamp(1.5rem,3vw,1.75rem)] font-bold text-dark">SSH 连接</h2>
+            <p class="text-gray-500 mt-1">配置您的远程服务器连接信息</p>
+        </div>
+        
+        <form class="space-y-5" id="ssh-form">
+            <div>
+                <label for="host" class="block text-sm font-medium text-gray-700 mb-1">主机地址:端口</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa fa-server text-gray-400"></i>
+                    </div>
+                    <input type="text" id="host" placeholder="例如: example.com 或 example.com:22" 
+                        class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 bg-gray-50 text-gray-800 form-input-focus transition-smooth"
+                        required>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">默认端口: 22</p>
+            </div>
+            
+            <div>
+                <label for="username" class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa fa-user text-gray-400"></i>
+                    </div>
+                    <input type="text" id="username" placeholder="您的用户名" 
+                        class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 bg-gray-50 text-gray-800 form-input-focus transition-smooth"
+                        required>
+                </div>
+            </div>
+            
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa fa-lock text-gray-400"></i>
+                    </div>
+                    <input type="password" id="password" placeholder="您的密码" 
+                        class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 bg-gray-50 text-gray-800 form-input-focus transition-smooth"
+                        required>
+                </div>
+            </div>
+            
+            <button id="connect-btn" class="w-full bg-primary hover:bg-primary/90 text-white font-medium py-3 px-4 rounded-lg transition-smooth flex items-center justify-center gap-2">
+                <span>连接到服务器</span>
+                <i class="fa fa-arrow-right"></i>
+            </button>
+        </form>
+        
+        <div class="mt-6 text-center text-sm text-gray-500">
+            <p>使用 Web SSH 客户端安全连接到您的服务器</p>
+        </div>
+    </div>
+
+    <!-- 终端容器 -->
+    <div id="terminal-container" class="w-full h-screen bg-terminal-bg opacity-0 transition-smooth pointer-events-none">
+        <!-- 终端顶部导航栏 -->
+        <div class="bg-dark px-4 py-2 flex items-center justify-between border-b border-dark-light">
+            <div class="flex items-center gap-3">
+                <i class="fa fa-terminal text-secondary"></i>
+                <span id="connection-info" class="text-gray-300 text-sm">未连接</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="disconnect-btn" class="text-gray-400 hover:text-white px-3 py-1 rounded text-sm transition-smooth hidden">
+                    <i class="fa fa-sign-out mr-1"></i> 断开连接
+                </button>
+                <button id="resize-btn" class="text-gray-400 hover:text-white p-1.5 rounded text-sm transition-smooth">
+                    <i class="fa fa-expand"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 终端内容 -->
+        <div id="terminal" class="w-full h-[calc(100%-40px)] overflow-y-auto"></div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.min.js"></script>
     <script>
@@ -42,20 +154,53 @@
                 });
         }
 
-        // 初始化SSH连接
-        fetch('/ssh/connect', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
+        // 配置并连接SSH
+        document.getElementById('ssh-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const hostPort = document.getElementById('host').value.split(':');
+            const host = hostPort[0];
+            const port = hostPort[1] || 22;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (!host || !username || !password) {
+                alert('请填写所有必填字段！');
+                return;
             }
-        }).then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                term.writeln('SSH连接成功！');
-                pollSSHOutput();
-            } else {
-                term.writeln('SSH连接失败: ' + data.message);
-            }
+
+            // 保存配置
+            fetch('/ssh/configure', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    host,
+                    port,
+                    username,
+                    password
+                })
+            }).then(() => {
+                // 连接SSH
+                fetch('/ssh/connect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }).then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('config-form').style.display = 'none';
+                        document.getElementById('terminal-container').classList.remove('opacity-0', 'pointer-events-none');
+                        document.getElementById('connection-info').textContent = `已连接: ${host}:${port}`;
+                        term.writeln('SSH连接成功！');
+                        pollSSHOutput();
+                        term.scrollToBottom();
+                    } else {
+                        term.writeln('SSH连接失败: ' + data.message);
+                    }
+                });
+            });
         });
 
         // 将终端输入发送到后端
